@@ -1,0 +1,62 @@
+PIMEX — Zamów próbki 5.0.0
+Weryfikacja lokalna: 10.11.2026
+
+WYKONANO
+- Parser składni PHP 7.4: wszystkie 8 plików PHP paczki.
+- 70 asercji kontraktów w PHP 7.4 i te same 70 w PHP 8.3 przez PHP WASM.
+  Testowane funkcje WordPress/WooCommerce były izolowanymi atrapami.
+- 107 asercji Chromium/Playwright dla szerokości 390, 1440 i 1920 px,
+  katalogu do 1500 wzorów i panelu przygotowania katalogu.
+- Kontrola kompletności ZIP i składni JavaScript.
+
+KONTRAKTY PHP OBEJMUJĄ
+- brak zapytań produktów przy starcie wtyczki i odczycie katalogu;
+- brak publicznych endpointów AJAX oraz workerów cron nowej wersji;
+- katalog pusty i nieaktualny bez samoczynnej budowy;
+- ponad 500 wariantów jednego produktu w kolejnych partiach po 10,
+  bez get_children();
+- zachowanie poprzedniego wyniku przy przerwaniu, błędzie, zmianie danych,
+  równoległej budowie i przekroczeniu limitów zasobów;
+- blokadę równoległych żądań i odzyskanie wygasłej blokady;
+- uprawnienia administratora i nonce przed rozpoczęciem pracy;
+- wyłączenia próbek i grupowanie długości w obrębie jednego rodzica;
+- rozdzielenie różnych produktów i profili, czytelne etykiety zamówienia;
+- brak przyjmowania zamówień przed świadomym włączeniem;
+- cenę z serwera, odrzucenie nieprawidłowych ID i dużych danych formularza;
+- limit zestawu, brak duplikatów i wycofanie częściowego dodania do koszyka;
+- przeliczenie ceny sztuki na mb/m², VAT podstawowy, szerokość krycia,
+  brakujące wymiary jako null;
+- cenę próbki i przesyłki brutto, osobne paczki próbek oraz pełnych desek,
+  brak automatycznej krajowej stawki dla dostawy zagranicznej;
+- zapis modelu i identyfikatorów w metadanych pozycji zamówienia;
+- zapis ustawień, odrzucenie ujemnych kwot, bez częściowej zmiany danych;
+- bezpieczne osadzenie danych produktów w JSON.
+
+PRZEGLĄDARKA OBEJMUJE
+- cztery rzędy kafelków i stronicowanie, brak poziomego przepełnienia;
+- trzy przyciski zastosowań nad filtrami;
+- wybór, limit, stan niedostępny, suma brutto i oddzielne czyszczenie filtrów
+  oraz zestawu;
+- odtworzenie wyboru po powrocie, reset filtrów, obsługę klawiatury;
+- równoczesne granice mb/m² spełnione przez ten sam wariant;
+- bezpieczny tekst produktów i odrzucenie URL javascript:;
+- katalog 1500 wzorów z tylko 20 kafelkami w DOM na szerokim ekranie;
+- brak żądań admin-ajax/wp-cron i samoczynnego odpytywania podczas testu;
+- wyłącznie świadomie uruchomione, sekwencyjne żądania panelu;
+- zatrzymanie po błędzie bez ponawiania, pauzę i anulowanie.
+
+NIE WYKONANO
+- testu na działającym sklepie ani pełnej kopii jego bazy;
+- integracji z rzeczywistym WordPress/WooCommerce, WoodMart, pozostałymi
+  wtyczkami, bramkami płatności, przewoźnikami i wysyłaniem maili;
+- testu płatności ani prawdziwego zamówienia;
+- testu obciążeniowego na MyDevil ani pomiaru limitów PHP tego konta;
+- próby przywrócenia wykonanej przez właścicielkę kopii sklepu.
+
+Nie potwierdzono jednoznacznie przyczyny wcześniejszych błędów 502.
+Te wyniki nie uzasadniają obietnicy, że na hostingu nie wystąpi przeciążenie.
+Usunięto konkretne ścieżki nieograniczonej pracy z poprzedniej architektury.
+Przed uruchomieniem sprzedaży wymagane jest sprawdzenie na kopii sklepu,
+a następnie obserwacja zasobów podczas kontrolowanej próby.
+
+Kod testów dostępny w repozytorium w katalogu tests/v5.

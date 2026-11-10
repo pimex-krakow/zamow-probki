@@ -1,0 +1,78 @@
+PIMEX — Zamów próbki 5.0.0
+
+Ta paczka zawiera samodzielną wtyczkę próbek. Nie wymaga porównywarki.
+Nie zmieniaj nazw katalogów tej paczki. W WordPressie instalujesz cały plik ZIP.
+
+1. Zachowaj wykonaną kopię plików i bazy poza serwerem.
+2. Pozostaw WYŁĄCZONE starsze „PIMEX — wybór próbek” oraz „PIMEX — porównaj
+   deski”. Nowa wersja wykrywa ich aktywne klasy i wtedy nie uruchamia swoich
+   funkcji. Nie usuwa starych wtyczek, produktów ani zamówień.
+3. Najpierw użyj podglądu/testowej kopii sklepu. Na takiej kopii wyłącz wysyłanie
+   maili, rzeczywiste płatności oraz integracje wysyłające dane do usług sklepu.
+4. Wtyczki → Dodaj wtyczkę → Wyślij wtyczkę na serwer. Wybierz
+   PIMEX-Zamow-probki-5.0.0.zip, zainstaluj i włącz „PIMEX — Zamów próbki 5”.
+5. Otwórz WooCommerce → Próbki PIMEX. Sprawdź cenę próbki, cenę wysyłki,
+   limit i istniejącą stronę. Zamawianie w tej wersji jest początkowo wyłączone,
+   także gdy w starych ustawieniach było włączone.
+   Jeśli nie ma produktu i strony, kliknij „Przygotuj stronę i produkt próbek”.
+   Nowa strona zostaje szkicem; istniejąca strona i ustawienia są zachowane.
+6. Kliknij „Przygotuj katalog” JEDEN RAZ. Pozostaw tę kartę otwartą.
+   Panel przetwarza kolejne partie, po maksymalnie 10 produktów lub wariantów.
+   Pokazuje liczby sprawdzonych źródeł i znalezionych wzorów.
+   Przycisk „Zatrzymaj” kończy pracę po bieżącej partii. „Wznów” kontynuuje.
+   Po zamknięciu karty lub błędzie nie ma samoczynnego ponawiania.
+   „Anuluj budowę” usuwa tylko postęp; opublikowany katalog pozostaje.
+   Przy błędzie zapisz komunikat. Nie odświeżaj wielokrotnie i nie zaczynaj
+   kolejnych aktualizacji równocześnie.
+7. Po komunikacie „Katalog gotowy” odśwież panel jeden raz. Wybierz widoczne
+   filtry i ich kolejność. Sprawdź dostępność próbek i przypisania odcieni.
+   Sprawdź podgląd istniejącej strony z kodem [pimex_probki].
+8. Wyklucz adres strony próbek z cache stron WP Fastest Cache i ewentualnego
+   CDN/proxy. Usuń wcześniej zapisaną kopię tej strony z cache.
+   Formularz zawiera nonce, a stan koszyka jest indywidualny.
+9. Po sprawdzeniu wyglądu zaznacz „Włącz przyjmowanie zamówień” i zapisz.
+   Na kopii testowej sprawdź:
+   - zaznaczenie jednej i kilku próbek, limit, koszyk i dane w zamówieniu;
+   - ponowne dodanie tej samej próbki oraz różne długości jednego koloru;
+   - niedostępną próbkę;
+   - próbki razem z pełnymi deskami: osobne paczki i koszty dostawy;
+   - koszyk i formularz zamówienia na telefonie oraz jako niezalogowany klient.
+   Zweryfikuj podatki i metody płatności używane w Twoim sklepie.
+10. Dopiero po takim sprawdzeniu przejdź przez te kroki na sklepie głównym.
+    Podczas próby sprawdź w MyDevil CPU, RAM i kolejkę PHP przed otwarciem
+    strony, podczas przygotowania katalogu i podczas dodawania próbek.
+
+Codzienna obsługa:
+- Klient przegląda gotowy katalog. Strona nie uruchamia budowy katalogu,
+  WP-Cron, Action Scheduler ani odpytywania admin-ajax.
+- Po zmianie produktów, kategorii, dostępności lub odcieni otwórz ten panel
+  i przygotuj katalog ponownie. Banner informuje o nieaktualnych danych.
+- Ceny pełnych desek w filtrach to zapis z chwili przygotowania katalogu,
+  przeliczony z ceny za sztukę. Nie służą do sprzedaży pełnych desek.
+- Przy dodawaniu do koszyka serwer ponownie sprawdza konkretnie wybrane
+  próbki; cena próbki i wysyłka pochodzą z ustawień serwera.
+- Pełne deski mogą być niedostępne magazynowo, a próbki dostępne niezależnie.
+- Odcień i wyłączenia ze starego katalogu są odczytywane także po starszych
+  kluczach. Ten sam kolor różnych produktów nadrzędnych nie jest scalany.
+
+Wycofanie:
+- Dezaktywuj wyłącznie „PIMEX — Zamów próbki 5”. To zatrzymuje jej obsługę
+  strony i koszyka; nie usuwa danych zamówień ani opublikowanych produktów.
+- Pozostaw stare wtyczki wyłączone, jeśli wcześniej powodowały problemy.
+- Nie przywracaj całej starej bazy na działającym sklepie bez uwzględnienia
+  zamówień złożonych od czasu kopii. Same pliki ZIP nie wymagają odtwarzania
+  całej bazy. Zmiany konfiguracji wymagają osobnej oceny.
+- Jeśli panel nie odpowiada, w menedżerze plików można zmienić nazwę folderu
+  wp-content/plugins/pimex-probki-v5 na pimex-probki-v5-off.
+
+Znane granice tej wersji:
+- Katalog: maksymalnie 1500 wzorów, 20 000 źródeł i 2 MB danych JSON;
+  maksymalnie 100 różnych par przeliczonych cen na wzór. Przekroczenie
+  zatrzymuje budowę i zachowuje poprzedni kompletny katalog.
+- Limit próbek w koszyku: do 50. Dostawa próbek: Polska, PLN.
+- Czas partii jest sprawdzany po każdym źródle (budżet 4 s); pojedyncze
+  wolne wywołanie WooCommerce może potrwać dłużej. Jest też limit 10 źródeł.
+- Wersja nie uruchamia strony porównywarki i nie może działać równolegle
+  ze starszą porównywarką PIMEX.
+- Testy lokalne opisano w TESTY.txt. Nie wykonano testu tej paczki na pełnej
+  kopii Twojej bazy, z motywem WoodMart, płatnościami i rzeczywistym ruchem.

@@ -1,0 +1,104 @@
+<?php
+require __DIR__.'/fixture.php';
+use Pimex_Samples_V5 as P;
+use Pimex_Samples_V5_Catalog as C;
+use Pimex_Samples_V5_Builder as B;
+use Pimex_Samples_V5_View as V;
+function expect_failure($f,$label){$failed=false;try{$f();}catch(RuntimeException $e){$failed=true;}check($failed,$label);}
+$before=$GLOBALS['product_reads']??0;P::boot();
+check(($GLOBALS['product_reads']??0)===$before,'bootstrap does not load any products');
+check(!array_filter($GLOBALS['hooks'],function($h){return strpos($h[0],'nopriv')!==false||$h[0]==='pimex_samples_refresh_catalog';}),'no public AJAX endpoint or cron worker registered');
+check(!P::ready(),'ordering starts disabled even when legacy option is enabled');
+check(C::all()===[] && C::is_waiting(),'cold catalog read returns immediately without build');
+$before=$GLOBALS['product_reads'];V::render();check($before===$GLOBALS['product_reads'],'cold page never starts indexing');
+$revision=get_option('pimex_samples_catalog_revision');C::changed_product(99);check(get_option('pimex_samples_catalog_revision')===$revision,'technical checkout product does not invalidate index');
+$before=count($GLOBALS['hooks']);C::invalidate();check(count($GLOBALS['hooks'])===$before,'invalidation does not schedule any work');
+$GLOBALS['opts']['pimex_samples_v5_live']=true;
+$base=['Producent'=>'PIMEX','Seria'=>'Wspólna nazwa','Kolor'=>'Szary','Szerokość'=>'145 mm','Grubość'=>'25 mm','Długość'=>'3000 mm'];
+add_product(1,'Product',$base);add_product(2,'Product',$base);
+check(P::source(1)['key']!==P::source(2)['key'],'identical profiles from separate parent products never merge');
+check(C::dimensions('2,4 m | 300 cm | 4000 mm')===[2400.0,3000.0,4000.0],'mixed units parsed in millimeters');
+check(C::product_dimensions(new Product(['Szerokość krycia'=>'130 mm']),'width')===[],'coverage width does not masquerade as board width');
+check(P::source(1)['coating']==='','material composition does not imply polymer coating');
+$parent=add_product(10,'Variable',$base);
+for($i=1000;$i<1505;$i++){add_product($i,'Variation',['Kolor'=>'Szary','Długość'=>($i%2?4000:3000).' mm']);}
+check(P::source(1000)['key']===P::source(1001)['key'],'different lengths of one parent/color share one sample');
+add_product(2000,'Variation',['Kolor'=>'Szary','Szerokość'=>'200 mm','Długość'=>'3000 mm']);
+check(P::source(2000)['key']!==P::source(1000)['key'],'different widths remain separate samples');
+$legacy=P::source(1)['legacy_profile_key'];$GLOBALS['opts'][P::OPTION]['excluded_keys']=[$legacy];
+check(P::source(1)===false,'legacy profile exclusion remains enforced');$GLOBALS['opts'][P::OPTION]['excluded_keys']=[];
+$progress=B::step(true);check(!$progress['done'] && $progress['batch']<=10,'first build request is bounded');
+check(B::snapshot()===false,'partial index is not visible to customers');
+expect_failure(function(){B::step(true);},'concurrent new build cannot replace active progress');
+$steps=1;
+while(!$progress['done']){$progress=B::step();++$steps;if($steps>100)throw new Exception('build failed to finish');}
+$snapshot=B::snapshot();check($steps>50 && count($snapshot['items'])===4,'505 variants processed across many batches without loading children');
+check($GLOBALS['wpdb']->max_batch===10,'all source queries limited to ten IDs');
+check(count($snapshot['items'][2]['aliases']??[])>0,'source aliases retained for sample handoff');
+check(!get_option(B::key('lock')) && !get_option(B::key('build')),'finished build releases lock and build state');
+$reads=$GLOBALS['product_reads'];$queries=count($GLOBALS['wpdb']->queries);$items=C::all();check($reads===$GLOBALS['product_reads']&&$queries===count($GLOBALS['wpdb']->queries),'warm catalog has zero product loads and zero source queries');
+$html=V::render();check(strpos($html,'pimex-samples-v5')!==false && strpos($html,'pimex_samples_nonce')!==false,'standalone view and CSRF-protected cart form rendered');
+$before=B::snapshot();$progress=B::step(true);B::cancel();check(B::snapshot()===$before&&!get_option(B::key('build')),'cancel keeps prior complete snapshot intact');
+$lock=time().':another-worker';$GLOBALS['opts'][B::key('lock')]=$lock;
+expect_failure(function(){B::step(true);},'parallel worker is refused');check(get_option(B::key('lock'))===$lock,'failed worker never releases someone else lock');
+$GLOBALS['opts'][B::key('lock')]=(time()-301).':expired';B::step(true);B::cancel();check(!get_option(B::key('lock')),'expired lock can be recovered');
+B::step(true);C::invalidate();expect_failure(function(){B::step();},'data change during build stops publication');check(B::snapshot()===$before,'failed build preserves published snapshot');B::cancel();
+$cart=new TestCart();$GLOBALS['current_cart']=$cart;check(P::add_samples([1,2])===true && count($cart->items)===2,'two different parent samples added');
+check(P::add_samples([1])===true && count($cart->items)===2,'repeated sample does not duplicate cart line');
+$cart=new TestCart();$GLOBALS['current_cart']=$cart;check(P::add_samples([1000,1001])===true && count($cart->items)===1,'length variants deduplicate in cart on server');
+$cart=new TestCart();$cart->fail_after=1;$GLOBALS['current_cart']=$cart;
+check(P::add_samples([1,2])!==true && !$cart->items,'partial cart addition rolls back completely');
+$cart=new TestCart();$GLOBALS['current_cart']=$cart;
+foreach([[0],[-1],['1e2'],['1x'],[[]],array_fill(0,51,1)] as $ids){check(P::add_samples($ids)!==true && !$cart->items,'invalid or oversized IDs rejected: '.json_encode($ids));}
+$parent->meta['_pimex_sample_disabled']='yes';check(P::add_samples([1000])!==true,'availability rechecked live against source metadata');$parent->meta=[];
+check(P::validate(true,99,1)===false,'direct ordinary purchase of technical sample product blocked');
+$GLOBALS['opts']['pimex_samples_v5_live']=false;check(P::add_samples([1])!==true,'server refuses orders when preview mode active');$GLOBALS['opts']['pimex_samples_v5_live']=true;
+$_SERVER['REQUEST_METHOD']='POST';$_POST=['pimex_samples_action'=>'add','pimex_samples_nonce'=>['malicious'],'pimex_samples_ids'=>'[1]'];
+expect_failure(function(){P::submit();},'array nonce rejected without PHP warning');
+$_POST['pimex_samples_nonce']='nonce';$_POST['pimex_samples_ids']=str_repeat('1',2050);
+try{P::submit();}catch(Redirect $e){}check(!$cart->items,'oversized raw payload cannot mutate cart');
+$GLOBALS['tax_enabled']=true;$GLOBALS['prices_include_tax']=false;
+$rate=V::rate($GLOBALS['test_products'][1],P::source(1));check(abs($rate['mb']-50.43)<.001 && abs($rate['m2']-347.79)<.001,'rates use per-piece price plus base VAT and actual area');
+$cover=add_product(3,'Product',array_merge($base,['Szerokość krycia'=>'130 mm']));$rate=V::rate($cover,P::source(3));check(abs($rate['m2']-387.92)<.001,'price per square meter prefers coverage width');
+$unknown=add_product(4,'Product',['Kolor'=>'Szary']);check(V::rate($unknown,P::source(4))===['mb'=>null,'m2'=>null],'missing dimensions yield null rates, never zero');
+$cart=new TestCart();$GLOBALS['current_cart']=$cart;P::add_samples([1]);P::enforce_price($cart);$line=reset($cart->items);check(abs($line['data']->stored_price*1.23-4)<.00001,'sample cart net price preserves configured gross amount');
+$package=['contents'=>$cart->items,'contents_cost'=>0,'destination'=>['country'=>'PL']];
+$packages=P::packages([$package]);$rates=P::shipping([],end($packages));$r=reset($rates);check(abs($r->cost+array_sum($r->taxes)-14)<.00001,'single shipment gross preserved with VAT');
+$board=['product_id'=>1,'quantity'=>2,'line_total'=>100,'data'=>$GLOBALS['test_products'][1]];
+$package['contents']['board']=$board;$packages=P::packages([$package]);check(count($packages)===2&&isset($packages[0]['contents']['board'])&&!isset($packages[1]['contents']['board']),'mixed cart keeps boards in separate shipping package');
+check(P::shipping(['ordinary'],['contents'=>[]])===['ordinary'],'ordinary board rates remain unchanged');
+check(P::shipping([],['pimex_samples_package'=>true,'destination'=>['country'=>'DE']])===[],'foreign sample shipping not silently priced as domestic');
+class OrderLine{public $meta=[],$name;function set_name($n){$this->name=$n;}function add_meta_data($k,$v,$unique){$this->meta[$k]=$v;}}
+$order=new OrderLine();P::order_item($order,'k',$line,null);check($order->meta['_pimex_sample_source']===1 && $order->name==='Próbka — Model A','order line records chosen source and human-readable name');
+check(P::parse_amount('7,50')==='7.50'&&P::parse_amount('-1')===false,'admin prices accept decimal comma and reject negatives');
+echo "All v5 contract tests complete.\n";
+// Resource guards must fail closed and retain the last published catalog.
+$published=B::snapshot();
+$baseState=['active'=>true,'cursor'=>0,'ceiling'=>99999,'scanned'=>20000,'items'=>[], 'signature'=>C::signature(),'updated'=>time()];
+$GLOBALS['opts'][B::key('build')]=$baseState;
+expect_failure(function(){B::step();},'source budget stops oversized build');check(B::snapshot()===$published,'source limit preserves published catalog');B::cancel();
+$baseState['scanned']=0;$baseState['cursor']=99999;$baseState['ceiling']=99999;$baseState['items']=array_fill(0,1501,['key'=>'dummy']);
+$GLOBALS['opts'][B::key('build')]=$baseState;
+expect_failure(function(){B::step();},'sample count limit refuses partial publication');B::cancel();
+$baseState['items']=[['key'=>'dummy','label'=>str_repeat('x',2000001)]];$GLOBALS['opts'][B::key('build')]=$baseState;
+expect_failure(function(){B::step();},'serialized data budget stops oversized payload');B::cancel();
+check(B::snapshot()===$published,'all resource errors preserve published catalog');
+// Untrusted content is embedded as data, never HTML.
+$unsafe=$published;$unsafe['items'][0]['title']='</script><img src=x onerror=alert(1)>';$GLOBALS['opts'][B::key('snapshot')]=$unsafe;B::reset_memory();
+$html=V::render();check(strpos($html,'</script><img src=x')===false && strpos($html,'\\u003C')!==false,'catalog JSON escapes HTML/script terminators');
+$GLOBALS['opts'][B::key('snapshot')]=$published;B::reset_memory();
+echo "Resource and escaping tests complete.\n";
+$reads=$GLOBALS['product_reads'];$GLOBALS['can_manage']=false;
+expect_failure(function(){B::request();},'admin builder denies users without manage_woocommerce');
+check($reads===$GLOBALS['product_reads'],'unauthorized build request performs no source work');
+$GLOBALS['can_manage']=true;$GLOBALS['nonce_valid']=false;
+expect_failure(function(){B::request();},'admin builder rejects invalid nonce before indexing');
+check($reads===$GLOBALS['product_reads'],'invalid build nonce performs no source work');$GLOBALS['nonce_valid']=true;
+ob_start();Pimex_Samples_V5_Admin::render();$admin=ob_get_clean();
+check(strpos($admin,'pimex-v5-builder')!==false&&strpos($admin,'view_filter_enabled[]')!==false,'independent admin build controls and filter settings rendered');
+$_POST=['sample_price'=>'7,50','sample_shipping'=>'18,90','sample_max'=>'3','sample_enabled'=>'1','sample_excluded'=>''];
+try{P::save();}catch(Redirect $e){}
+check(get_option(P::OPTION)['price']==='7.50'&&get_option(P::OPTION)['shipping']==='18.90'&&get_option('pimex_samples_v5_live')===true,'settings save preserves decimal gross prices and explicitly enables orders');
+$before=$GLOBALS['opts'];$_POST['sample_shipping']='-1';expect_failure(function(){P::save();},'invalid shipping amount rejected');check($GLOBALS['opts']===$before,'invalid settings do not write partial changes');
+check(strpos(P::source(2000)['label'],'Szerokość')!==false,'profile distinction appears in cart and order label');
+$reads=$GLOBALS['product_reads'];C::invalidate();C::all();check($reads===$GLOBALS['product_reads'],'stale catalog read does not rebuild or load products');
